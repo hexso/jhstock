@@ -2,24 +2,20 @@ from pykiwoom.kiwoom import *
 from pykiwoom.wrapper import *
 import logging
 
-
-class ab():
-    def __init__(self,a,b):
-        print(a)
+import mylog
+a=mylog.mylogging()
 
 
-def my_log(original_function):
-    def inner_function():
-        print("what?")
-        return original_function()
-    print("is in logging")
-    return inner_function
+@a.logBuying
+def hey(a,b):
+    print(a,b)
 
 if __name__ == '__main__':
+    aa = logging.getLogger("asd")
+    aa.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    stream_hander = logging.StreamHandler()
+    stream_hander.setFormatter(formatter)
+    aa.addHandler(stream_hander)
 
-    @my_log
-    def hey():
-        print("haha")
-
-    hey()
-    c=ab(1,2)
+    aa.info("%d",1)
