@@ -138,7 +138,10 @@ class MyWindow(QMainWindow, form_class):
     def send_order(self, code, qty, price, order_type=1, hoga_type="00"):
         """ 키움서버로 주문정보를 전송한다. """
         order_type_table = {'신규매수': 1, '신규매도': 2, '매수취소': 3, '매도취소': 4}
-        hoga_type_table = {'지정가': "00", '시장가': "03"}
+
+        #모의투자에서는 지정가와 시장가밖에 안된다.
+        #실제 거래에서는 최우선지정가를 고려해보는것도 좋을것 같다.
+        hoga_type_table = {'지정가': "00", '시장가': "03", '최유리지정가':"06", '최우선지정가':"07"}
 
         account = self.accountComboBox.currentText()
 
@@ -147,39 +150,11 @@ class MyWindow(QMainWindow, form_class):
         except (ParameterTypeError, KiwoomProcessingError) as e:
             self.show_dialog('Critical', e)
 
-    def automatic_order(self, code, qty, price, order_type=1, hoga_type="00"):
-        hoga_type_table = {'지정가': "00", '시장가': "03"}
-        account = self.accountComboBox.currentText()
-        automated_stocks = []
-        self.in_processing = True
-        # 파일읽기
-        try:
-            for file in file_list:
-                # utf-8로 작성된 파일을
-                # cp949 환경에서 읽기위해서 encoding 지정
-                with open(file, 'rt', encoding='utf-8') as f:
-                    stocks_list = f.readlines()
-                    automated_stocks += stocks_list
-        except Exception as e:
-            print(e)
-            #e.msg = "automatic_order() 에러"
-            #self.show_dialog('Critical', e)
-            return
-
-        cnt = len(automated_stocks)
+    def automatic_order(self, code, qty, price, selling=1, hoga_type="00"):
 
         # 주문하기
         buy_result = []
         sell_result = []
-
-        for i in range(cnt):
-            time.sleep(0.3)
-            stocks = automated_stocks[i].split(';')
-
-            code = stocks[1]
-            hoga = stocks[2]
-            qty = stocks[3]
-            price = stocks[4]
 
             try:
                 if stocks[5].rstrip() == '매수전':
