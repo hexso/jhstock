@@ -8,6 +8,7 @@ class auto_thema() :
 
     def __init__(self, pyTrader):
         self.pyTrader = pyTrader
+        self.trader = pyTrader.kiwoom
 
     def buying(self):
         self.pyTrader.send_order(0)

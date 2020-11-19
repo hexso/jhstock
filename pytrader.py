@@ -10,7 +10,7 @@ from PyQt5.QtCore import Qt, QTimer, QTime
 from PyQt5 import uic
 from pykiwoom.kiwoom import *
 from pykiwoom.wrapper import *
-
+import time
 from mylog import mylogging
 
 AUTO_TRADE_TIME = 2100 # 자동매매시간 21초
@@ -42,6 +42,7 @@ class MyWindow(QMainWindow, form_class):
 
         self.login_btn.clicked.connect(self.kiwoom_login)
         self.strategyComboBox.addItems(STRATEGY_LIST)
+
     def kiwoom_login(self):
         self.kiwoom = Kiwoom()
         self.kiwoom.comm_connect()
@@ -67,7 +68,8 @@ class MyWindow(QMainWindow, form_class):
             self.show_dialog('Critical', e)
 
 
-
+    def setStockList(self):
+        pass
 ################수정해야함
 
     def inquiry_balance(self):
@@ -79,17 +81,17 @@ class MyWindow(QMainWindow, form_class):
         try:
             # 예수금상세현황요청
             self.kiwoom.set_input_value("계좌번호", self.accountComboBox.currentText())
-            self.kiwoom.set_input_value("비밀번호", "0000")
+            self.kiwoom.set_input_value("비밀번호", PASSWORD)
             self.kiwoom.comm_rq_data("예수금상세현황요청", "opw00001", 0, "2000")
 
             # 계좌평가잔고내역요청 - opw00018 은 한번에 20개의 종목정보를 반환
             self.kiwoom.set_input_value("계좌번호", self.accountComboBox.currentText())
-            self.kiwoom.set_input_value("비밀번호", "0000")
+            self.kiwoom.set_input_value("비밀번호", PASSWORD)
             self.kiwoom.comm_rq_data("계좌평가잔고내역요청", "opw00018", 0, "2000")
             while self.kiwoom.inquiry == '2':
                 time.sleep(0.2)
                 self.kiwoom.set_input_value("계좌번호", self.accountComboBox.currentText())
-                self.kiwoom.set_input_value("비밀번호", "0000")
+                self.kiwoom.set_input_value("비밀번호", PASSWORD)
                 self.kiwoom.comm_rq_data("계좌평가잔고내역요청", "opw00018", 2, "2")
         except (ParameterTypeError, ParameterValueError, KiwoomProcessingError) as e:
             self.show_dialog('Critical', e)
@@ -135,10 +137,9 @@ class MyWindow(QMainWindow, form_class):
         #self.timer_stock.start(1000*100)
 
     @my_log.logBuying
-    def send_order(self, code, qty, price, order_type=1, hoga_type="00"):
+    def send_order(self, code, qty, price, selling=1, hoga_type='시장가'):
         """ 키움서버로 주문정보를 전송한다. """
         order_type_table = {'신규매수': 1, '신규매도': 2, '매수취소': 3, '매도취소': 4}
-
         #모의투자에서는 지정가와 시장가밖에 안된다.
         #실제 거래에서는 최우선지정가를 고려해보는것도 좋을것 같다.
         hoga_type_table = {'지정가': "00", '시장가': "03", '최유리지정가':"06", '최우선지정가':"07"}
@@ -146,49 +147,61 @@ class MyWindow(QMainWindow, form_class):
         account = self.accountComboBox.currentText()
 
         try:
-            self.kiwoom.send_order("수동주문", "0101", account, order_type, code, qty, price, hoga_type, "")
+            for try_order_cnt in range(5):
+                self.kiwoom.send_order("자동주문", "0101", account, selling, code, qty, price, hoga_type_table[hoga_type], "")
+                if self.kiwoom.order_no != "":
+                    print("order_no: ", self.kiwoom.order_no)
+                    break
+                time.sleep(0.3)
         except (ParameterTypeError, KiwoomProcessingError) as e:
             self.show_dialog('Critical', e)
 
-    def automatic_order(self, code, qty, price, selling=1, hoga_type="00"):
+        self.inquiry_balance()
+
+    def automatic_order(self, code, qty, price, selling=1, hoga_type="03"):
 
         # 주문하기
         buy_result = []
         sell_result = []
+        order_type_table = {'신규매수': 1, '신규매도': 2, '매수취소': 3, '매도취소': 4}
+        # 모의투자에서는 지정가와 시장가밖에 안된다.
+        # 실제 거래에서는 최우선지정가를 고려해보는것도 좋을것 같다.
+        hoga_type_table = {'지정가': "00", '시장가': "03", '최유리지정가': "06", '최우선지정가': "07"}
 
-            try:
-                if stocks[5].rstrip() == '매수전':
-                    self.kiwoom.send_order("자동매수주문", "0101", account, 1, code, int(qty), int(price), hoga_type_table[hoga], "")
-                    print("order_no: ", self.kiwoom.order_no)
 
-                    # 주문 접수시
-                    if self.kiwoom.order_no:
-                        buy_result += automated_stocks[i].replace("매수전", "매수완료")
-                        self.kiwoom.order_no = ""
-                    # 주문 미접수시
-                    else:
-                        buy_result += automated_stocks[i]
+        try:
+            if stocks[5].rstrip() == '매수전':
+                self.kiwoom.send_order("자동매수주문", "0101", account, 1, code, int(qty), int(price), hoga_type_table[hoga], "")
+                print("order_no: ", self.kiwoom.order_no)
 
-                # 참고: 해당 종목을 현재도 보유하고 있다고 가정함.
-                elif stocks[5].rstrip() == '매도전':
-                    self.kiwoom.send_order("자동매도주문", "0101", account, 2, code, int(qty), 0, hoga_type_table[hoga], "")
-                    print("order_no: ", self.kiwoom.order_no)
-
-                    # 주문 접수시
-                    if self.kiwoom.order_no:
-                        sell_result += automated_stocks[i].replace("매도전", "매도완료")
-                        self.kiwoom.order_no = ""
-                    # 주문 미접수시
-                    else:
-                        sell_result += automated_stocks[i]
-                elif stocks[5].rstrip() == '매수완료':
+                # 주문 접수시
+                if self.kiwoom.order_no:
+                    buy_result += automated_stocks[i].replace("매수전", "매수완료")
+                    self.kiwoom.order_no = ""
+                # 주문 미접수시
+                else:
                     buy_result += automated_stocks[i]
-                elif stocks[5].rstrip() == '매도완료':
-                    sell_result += automated_stocks[i]
 
-            except (ParameterTypeError, KiwoomProcessingError) as e:
-                #self.show_dialog('Critical', e)
-                print(e)
+            # 참고: 해당 종목을 현재도 보유하고 있다고 가정함.
+            elif stocks[5].rstrip() == '매도전':
+                self.kiwoom.send_order("자동매도주문", "0101", account, 2, code, int(qty), 0, hoga_type_table[hoga], "")
+                print("order_no: ", self.kiwoom.order_no)
+
+                # 주문 접수시
+                if self.kiwoom.order_no:
+                    sell_result += automated_stocks[i].replace("매도전", "매도완료")
+                    self.kiwoom.order_no = ""
+                # 주문 미접수시
+                else:
+                    sell_result += automated_stocks[i]
+            elif stocks[5].rstrip() == '매수완료':
+                buy_result += automated_stocks[i]
+            elif stocks[5].rstrip() == '매도완료':
+                sell_result += automated_stocks[i]
+
+        except (ParameterTypeError, KiwoomProcessingError) as e:
+            #self.show_dialog('Critical', e)
+            print(e)
 
         # 잔고및 보유종목 디스플레이 갱신
         self.inquiry_balance()
